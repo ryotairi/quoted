@@ -122,7 +122,7 @@ function renderMessageBody(content) {
         case 'm.image': {
             const url = content.url || '';
             const alt = escapeHtml(content.body || 'image');
-            return `<div class="message-image"><img src="${escapeHtml(url)}" alt="${alt}" /></div>`;
+            return `<div class="message-image"><img src="${escapeHtml(url)}" alt="${alt}"></div>`;
         }
         case 'm.video':
         case 'm.audio':
