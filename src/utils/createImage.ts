@@ -104,6 +104,9 @@ function escapeHtml(text: string): string {
 }
 
 function renderMessageBody(content) {
+    if (Object.keys(content).length === 0) {
+        return `<div class="unsupported">Message redacted</div>`;
+    }
     const msgtype = content.msgtype;
 
     switch (msgtype) {
