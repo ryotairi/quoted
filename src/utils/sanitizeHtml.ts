@@ -29,7 +29,7 @@ export function sanitizeEventHtml(dirty: string): string {
     return sanitize(dirty, {
         allowedTags,
         allowedAttributes,
-        allowedSchemes: ['https', 'http', 'mxc', 'mailto'],
+        allowedSchemes: ['mxc'],
         transformTags: {
             'img': (tagName, attribs) => {
                 return {
