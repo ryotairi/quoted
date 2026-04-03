@@ -38,7 +38,7 @@ export default async function createImage(events: any[]): Promise<string> {
 
         if (typeof replyToId === 'string') {
             try {
-                const replyTo = await client.fetchRoomEvent(event.room_id, event.event_id);
+                const replyTo = await client.fetchRoomEvent(event.room_id, replyToId);
                 let replyDisplayname: string = replyTo.sender;
 
                 try {
