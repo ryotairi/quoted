@@ -1,0 +1,24 @@
+{
+  "name": "quoted",
+  "version": "1.0.0",
+  "description": "A Matrix bot to create stickers from messages.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "start": "node --enable-source-maps dist/index"
+  },
+  "author": "rustyraven",
+  "license": "AGPL-3.0-only",
+  "dependencies": {
+    "matrix-js-sdk": "^34.0.0",
+    "node-html-to-image": "^5.0.0",
+    "sanitize-html": "^2.17.2",
+    "typescript": "^6.0.2",
+    "yaml": "^2.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.1",
+    "@types/sanitize-html": "^2.16.1"
+  }
+}
