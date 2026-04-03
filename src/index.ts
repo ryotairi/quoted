@@ -111,7 +111,7 @@ client.on(RoomEvent.Timeline, async (event, room, toStartOfTimeline) => {
 
             const id = createFileId(allEvents);
             const state = room.getLiveTimeline().getState(Direction.Forward);
-            const roomEmotes = state.getStateEvents('im.ponies.room_emotes', 'Quoted')?.getContent() ?? {};
+            const roomEmotes = state.getStateEvents('im.ponies.room_emotes', 'quoted')?.getContent() ?? {};
             const images = roomEmotes && typeof roomEmotes.images === 'object' ? roomEmotes.images : {};
             const pack = roomEmotes && typeof roomEmotes.pack === 'object' ? roomEmotes.pack : null;
             if (images[id]) return;
