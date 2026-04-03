@@ -1,6 +1,10 @@
 # QuoteD
 **Quoted** is a Matrix bot that creates stickers from messages.
 
+## Examples
+![Example screenshot](examples/1.png)
+![Example screenshot](examples/2.png)
+
 ## Setting up
 1. **Clone the repo**
    ```
