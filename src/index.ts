@@ -2,7 +2,8 @@ import client from "./services/matrix";
 import config from "./services/config";
 import createImage from "./utils/createImage";
 import { readFileSync, mkdirSync, existsSync } from "fs";
-import { RoomEvent, RoomMemberEvent, Membership } from "matrix-js-sdk";
+import { RoomEvent, RoomMemberEvent, Membership, Direction } from "matrix-js-sdk";
+import createFileId from "./utils/createFileId";
 
 // Ensure tmp directory exists
 if (!existsSync('tmp')) {
@@ -60,7 +61,12 @@ client.on(RoomEvent.Timeline, async (event, room, toStartOfTimeline) => {
             const allEvents = [replyToEvent];
 
             if (count > 0) {
-                const timeline = room.getTimelineForEvent(replyTo);
+                let timeline = room.getTimelineForEvent(replyTo);
+                if (!timeline) {
+                    for (const set of room.getTimelineSets()) {
+                        timeline = await client.getEventTimeline(set, replyTo);
+                    }
+                }
                 const index = timeline.getEvents().findIndex(x => x.getId() == replyTo);
                 const events = timeline.getEvents();
                 for (let i = index + 1; i <= index + count; i++) {
@@ -99,6 +105,34 @@ client.on(RoomEvent.Timeline, async (event, room, toStartOfTimeline) => {
                     },
                 },
             });
+
+            const id = createFileId(allEvents);
+            const state = room.getLiveTimeline().getState(Direction.Forward);
+            const roomEmotes = state.getStateEvents('im.ponies.room_emotes', 'Quoted')?.getContent() ?? {};
+            const images = roomEmotes && typeof roomEmotes.images === 'object' ? roomEmotes.images : {};
+            const pack = roomEmotes && typeof roomEmotes.pack === 'object' ? roomEmotes.pack : null;
+            if (images[id]) return;
+
+            images[id] = {
+                info: {
+                    mimetype: 'image/png',
+                    size: imageData.length,
+                },
+                url: mxcUrl,
+            };
+
+            if (state.mayClientSendStateEvent('im.ponies.room_emotes', client)) {
+                // @ts-ignore
+                await client.sendStateEvent(room.roomId, 'im.ponies.room_emotes', { 
+                    images, 
+                    pack: pack ?? {
+                        display_name: 'Quoted',
+                        usage: ['sticker']
+                    }
+                 }, 'quoted');
+            } else {
+                client.sendHtmlNotice(room.roomId, '', '<i>Could not create "Quoted" sticker pack, can\'t send state event "im.ponies.room_emotes"</i>').catch(console.error);
+            }
         } catch (err) {
             console.error('Error processing quote:', err);
             client.sendHtmlNotice(room.roomId, '', '<b>Failed to create quote image.</b>').catch(console.error);

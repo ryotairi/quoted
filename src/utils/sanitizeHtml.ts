@@ -2,12 +2,6 @@ import sanitize from 'sanitize-html';
 import client from '../services/matrix';
 import config from '../services/config';
 
-/**
- * Transform an img src URL before rendering.
- * Implement your own logic here (e.g. proxying, converting mxc:// URLs, etc.)
- * @param src - The original src attribute value
- * @returns The transformed src URL
- */
 export function transformImgSrc(mxcUrl: string, thumbnail: boolean): string {
     const parts = mxcUrl.replace('mxc://', '').split('/');
     const serverName = parts[0];
@@ -31,11 +25,6 @@ const allowedAttributes: Record<string, string[]> = {
     ol: ['start'],
 };
 
-/**
- * Sanitize HTML content and transform all img src attributes.
- * @param dirty - The untrusted HTML string
- * @returns Sanitized HTML string with transformed img srcs
- */
 export function sanitizeEventHtml(dirty: string): string {
     return sanitize(dirty, {
         allowedTags,

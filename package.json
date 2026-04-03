@@ -12,6 +12,7 @@
   "license": "AGPL-3.0-only",
   "dependencies": {
     "matrix-js-sdk": "^34.0.0",
+    "md5": "^2.3.0",
     "node-html-to-image": "^5.0.0",
     "sanitize-html": "^2.17.2",
     "typescript": "^6.0.2",

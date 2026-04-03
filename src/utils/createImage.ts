@@ -1,14 +1,14 @@
-import { randomUUID } from "node:crypto";
+// import { randomUUID } from "node:crypto";
 import htmlToImage from "node-html-to-image";
 import { readFileSync } from "node:fs";
 import client from "../services/matrix";
 import config from "../services/config";
 import { sanitizeEventHtml } from "./sanitizeHtml";
+import createFileId from "./createFileId";
 
 const template = readFileSync('templates/message.html', 'utf-8');
 
 function mxcToHttpThumbnail(mxcUrl: string, width: number, height: number, method: string): string {
-    // mxc://server/mediaId -> https://homeserver/_matrix/media/v3/thumbnail/server/mediaId?width=W&height=H&method=M
     const parts = mxcUrl.replace('mxc://', '').split('/');
     const serverName = parts[0];
     const mediaId = parts.slice(1).join('/');
@@ -16,7 +16,7 @@ function mxcToHttpThumbnail(mxcUrl: string, width: number, height: number, metho
 }
 
 export default async function createImage(events: any[]): Promise<string> {
-    const fileName = `tmp/${randomUUID()}.png`;
+    const fileName = `tmp/${createFileId(events)}.png`;
 
     const eventsForHtml = [];
 
@@ -76,6 +76,9 @@ export default async function createImage(events: any[]): Promise<string> {
         transparent: true,
         type: 'png',
         waitUntil: 'networkidle0',
+        puppeteerArgs: {
+            args: config.puppeteerNoSandbox ? ['--no-sandbox'] : [],
+        },
         async beforeScreenshot(page) {
             // Resize viewport to fit the actual content, removing empty space
             const dimensions = await page.evaluate(() => {
@@ -135,7 +138,6 @@ function renderEvent(event) {
     const displayname = (event.unsigned && event.unsigned.displayname) || event.sender;
     const avatarUrl = event.unsigned && event.unsigned.avatar_url;
     const reply = event.unsigned && event.unsigned.reply;
-    // const timestamp = formatTimestamp(event.origin_server_ts);
 
     const avatarHtml = avatarUrl
         ? `<img class="avatar" src="${escapeHtml(avatarUrl)}" alt="" />`

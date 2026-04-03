@@ -9,6 +9,7 @@ type ConfigurationFile = {
     };
     helpText: string;
     welcomeText: string;
+    puppeteerNoSandbox: boolean;
 };
 
 function getConfig(): ConfigurationFile {

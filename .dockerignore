@@ -1,0 +1,7 @@
+node_modules
+dist
+tmp
+config.yml
+.git
+.gitignore
+*.md
