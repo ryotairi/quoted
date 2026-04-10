@@ -2,8 +2,9 @@ import client from "./services/matrix";
 import config from "./services/config";
 import createImage from "./utils/createImage";
 import { readFileSync, mkdirSync, existsSync } from "fs";
-import { RoomEvent, RoomMemberEvent, Membership, Direction } from "matrix-js-sdk";
+import { RoomEvent, RoomMemberEvent, Membership, Direction, MsgType } from "matrix-js-sdk";
 import createFileId from "./utils/createFileId";
+import { join } from 'path';
 
 // Ensure tmp directory exists
 if (!existsSync('tmp')) {
@@ -143,6 +144,23 @@ client.on(RoomEvent.Timeline, async (event, room, toStartOfTimeline) => {
         }
     } else if (cmd === '..help') {
         client.sendHtmlNotice(room.roomId, config.helpText, config.helpText).catch(console.error);
+    } else if (cmd === '..peter-griffin') {
+        // peter griffin
+        const buffer: Buffer = readFileSync(join(__dirname, '..', 'resources', 'peter.png'));
+        const uploadResponse = await client.uploadContent(new Uint8Array(buffer), {
+            "name": 'peter.png',
+            "type": 'image/png'
+        });
+        const mxcUrl = uploadResponse.content_uri;
+        await client.sendMessage(room.roomId, {
+            msgtype: MsgType.Image,
+            body: 'peter.png',
+            url: mxcUrl,
+            info: {
+                mimetype: 'image/png',
+                size: buffer.length
+            }
+        });
     }
 });
 
