@@ -2,6 +2,6 @@ matrix:
   homeserverUrl: http://localhost:8008
   userId: '@quoted:localhost'
   accessToken: 'syt_XXXXXXXX_ZZZZZZZZZZZZZZZZZZZZ_ZZZZZZ'
-helpText: 'Reply with <b>..q</b> to any message to create a sticker! Use <b>..q 1</b> to include 1 next message, etc...\n..peter-griffin for Peter Griffin'
+helpText: 'Reply with <b>..q</b> to any message to create a sticker! Use <b>..q 1</b> to include 1 next message, etc...<br>..peter-griffin for Peter Griffin'
 welcomeText: 'Hello, I am <b>Quoted</b>, a bot for creating stickers of messages. See <b>..help</b> for help. Source code is available on <a href="https://github.com/ryotairi/quoted">GitHub</a>.'
 puppeteerNoSandbox: false # set to true if using docker
