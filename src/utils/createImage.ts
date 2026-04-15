@@ -8,6 +8,10 @@ import createFileId from "./createFileId";
 
 const template = readFileSync('templates/message.html', 'utf-8');
 
+interface CreateImageOptions {
+    hideReplies?: boolean;
+}
+
 function mxcToHttpThumbnail(mxcUrl: string, width: number, height: number, method: string): string {
     const parts = mxcUrl.replace('mxc://', '').split('/');
     const serverName = parts[0];
@@ -15,7 +19,7 @@ function mxcToHttpThumbnail(mxcUrl: string, width: number, height: number, metho
     return `${config.matrix.homeserverUrl}/_matrix/client/v1/media/thumbnail/${serverName}/${mediaId}?width=${width}&height=${height}&method=${method}`;
 }
 
-export default async function createImage(events: any[]): Promise<string> {
+export default async function createImage(events: any[], options: CreateImageOptions = {}): Promise<string> {
     const fileName = `tmp/${createFileId(events)}.png`;
 
     const eventsForHtml = [];
@@ -36,7 +40,7 @@ export default async function createImage(events: any[]): Promise<string> {
             // Use sender as fallback
         }
 
-        if (typeof replyToId === 'string') {
+        if (!options.hideReplies && typeof replyToId === 'string') {
             try {
                 const replyTo = await client.fetchRoomEvent(event.room_id, replyToId);
                 let replyDisplayname: string = replyTo.sender;
