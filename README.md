@@ -21,3 +21,5 @@
 Reply to any message with **..q**, the bot will send a sticker and add it to room emote pack called "quoted".
 
 You also can quote multiple messages. Reply with **.q 1** to quote that message and 1 next, etc...
+
+Use **..q -c** to disable rendering of replied-to messages in the sticker.

@@ -50,9 +50,20 @@ client.on(RoomEvent.Timeline, async (event, room, toStartOfTimeline) => {
             return;
         }
 
-        // Parse optional count of additional messages after the replied-to message
-        const extraCount = args.length > 0 ? parseInt(args[0], 10) : 0;
-        const count = (!isNaN(extraCount) && extraCount > 0) ? Math.min(extraCount, 20) : 0;
+        // Parse optional flags and count of additional messages after the replied-to message.
+        let hideReplies = false;
+        let count = 0;
+        for (const arg of args) {
+            if (arg === '-c') {
+                hideReplies = true;
+                continue;
+            }
+
+            const parsedCount = parseInt(arg, 10);
+            if (!isNaN(parsedCount) && parsedCount > 0) {
+                count = Math.min(parsedCount, 20);
+            }
+        }
 
         try {
             if (count > 10) {
@@ -83,7 +94,7 @@ client.on(RoomEvent.Timeline, async (event, room, toStartOfTimeline) => {
                 }
             }
 
-            const filePath = await createImage(allEvents);
+            const filePath = await createImage(allEvents, { hideReplies });
             const imageData = readFileSync(filePath);
 
             // Upload the image
