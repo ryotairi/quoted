@@ -11,15 +11,19 @@
   "author": "rustyraven",
   "license": "AGPL-3.0-only",
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.99",
+    "highlight.js": "^11.11.1",
     "matrix-js-sdk": "^34.0.0",
     "md5": "^2.3.0",
-    "node-html-to-image": "^5.0.0",
     "sanitize-html": "^2.17.2",
     "typescript": "^6.0.2",
     "yaml": "^2.8.3"
   },
   "devDependencies": {
+    "@types/bun": "latest",
+    "@types/highlight.js": "^10.1.0",
     "@types/node": "^25.5.1",
     "@types/sanitize-html": "^2.16.1"
-  }
+  },
+  "private": true
 }

@@ -13,7 +13,11 @@ export function transformImgSrc(mxcUrl: string, thumbnail: boolean): string {
     }
 }
 
-const allowedTags = sanitize.defaults.allowedTags.concat(['img', 'span', 'del', 'br']);
+const allowedTags = sanitize.defaults.allowedTags.concat([
+    'img', 'span', 'del', 'br', 'font',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'ul', 'ol', 'li', 'pre'
+]);
 
 const allowedAttributes: Record<string, string[]> = {
     ...sanitize.defaults.allowedAttributes,
@@ -23,13 +27,18 @@ const allowedAttributes: Record<string, string[]> = {
     code: ['class'],
     font: ['color', 'data-mx-color', 'data-mx-bg-color'],
     ol: ['start'],
+    pre: ['class']
 };
 
 export function sanitizeEventHtml(dirty: string): string {
     return sanitize(dirty, {
         allowedTags,
         allowedAttributes,
-        allowedSchemes: ['mxc'],
+        allowedSchemes: ['mxc', 'http', 'https'],
+        exclusiveFilter: function(frame) {
+            // Strip out <mx-reply> and all its contents completely
+            return frame.tag === 'mx-reply';
+        },
         transformTags: {
             'img': (tagName, attribs) => {
                 return {
