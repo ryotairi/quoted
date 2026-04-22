@@ -238,7 +238,8 @@ export default async function createImage(events: any[], options: CreateImageOpt
             replyHeight,
             bubbleWidth,
             bubbleHeight,
-            rowHeight
+            rowHeight,
+            maxLineWidth
         };
 
         totalHeight += rowHeight + 8; // 8px gap between messages
@@ -255,7 +256,7 @@ export default async function createImage(events: any[], options: CreateImageOpt
     let currentY = PADDING;
 
     for (const event of parsedEvents) {
-        const { lines, replyLines, replyHeight, bubbleWidth, bubbleHeight, rowHeight } = event.layout;
+        const { lines, replyLines, replyHeight, bubbleWidth, bubbleHeight, rowHeight, maxLineWidth } = event.layout;
         const startX = PADDING;
 
         // Draw Avatar
@@ -303,7 +304,7 @@ export default async function createImage(events: any[], options: CreateImageOpt
         }
 
         // Draw Text Lines
-        if (lines.length > 0 && lines[0].width > 0) {
+        if (lines.length > 0 && maxLineWidth > 0) {
             contentTop = drawRichText(ctx, lines, bubbleX + BUBBLE_PAD_X, contentTop, bubbleWidth - BUBBLE_PAD_X * 2, "#e1e1e1");
         }
 
