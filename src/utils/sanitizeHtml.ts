@@ -34,7 +34,7 @@ export function sanitizeEventHtml(dirty: string): string {
     return sanitize(dirty, {
         allowedTags,
         allowedAttributes,
-        allowedSchemes: ['mxc', 'http', 'https'],
+        allowedSchemes: ['mxc'],
         exclusiveFilter: function(frame) {
             // Strip out <mx-reply> and all its contents completely
             return frame.tag === 'mx-reply';
