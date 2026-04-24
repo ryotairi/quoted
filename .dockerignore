@@ -4,5 +4,6 @@ tmp
 config.yml
 .git
 .gitignore
+.github
 *.md
 examples
