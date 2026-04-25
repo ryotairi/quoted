@@ -286,11 +286,11 @@ export function layoutRichText(oracle: MeasureOracle, tokens: Token[], maxWidth:
     let currentLine: Line = { width: 0, height: 20, isBlockquote: false, inPre, items: [] };
 
     const pushLine = () => {
-        if (currentLine.items.length > 0 || lines.length === 0) {
+        if (currentLine.items.length > 0 || currentLine.inPre || lines.length === 0) {
             const indent = currentLine.isBlockquote ? 12 : 0;
             const preIndent = currentLine.inPre ? 6 : 0;
             const rightPadding = currentLine.inPre ? 16 : 0;
-            if (currentLine.items.length > 0) {
+            if (currentLine.items.length > 0 || currentLine.inPre) {
                 currentLine.width += indent + preIndent + rightPadding;
             }
             lines.push(currentLine);
@@ -407,7 +407,7 @@ export function layoutRichText(oracle: MeasureOracle, tokens: Token[], maxWidth:
     }
     
     if (inPre) {
-        if (currentLine.items.length > 0) pushLine();
+        if (currentLine.items.length > 0 || currentLine.inPre) pushLine();
         lines.push({ width: 0, height: 12, isBlockquote: currentLine.isBlockquote, inPre: true, items: [] });
     } else if (currentLine.items.length > 0 || lines.length === 0) {
         pushLine();
