@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
-    "start": "node --enable-source-maps dist/index"
+    "start": "bun run dist/index"
   },
   "author": "rustyraven",
   "license": "AGPL-3.0-only",
