@@ -46,3 +46,6 @@ render:
   # Linux/Docker: ffmpeg  (installed via apt)
   # Windows: use forward slashes, e.g. "C:/ffmpeg/bin/ffmpeg.exe"
   # ffmpegPath: "ffmpeg"
+
+  # Render hidden / redacted (deleted) messages in quotes? Default false (skip them).
+  showHiddenMessages: false

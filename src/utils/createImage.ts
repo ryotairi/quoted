@@ -199,6 +199,7 @@ export default async function createImage(
   const BUBBLE_PAD_Y = 8;
   const TEXT_MAX_WIDTH = 420;
   const LINE_HEIGHT = 20;
+  const IMAGE_MAX = 320; // display cap for inline (non-sticker) images
 
   const parsedEvents: ParsedEvent[] = [];
 
@@ -209,6 +210,16 @@ export default async function createImage(
     const isStickerEvent = event.type === "m.sticker";
     if (!isMessage && !isStickerEvent) {
       log.debug(`skip event ${ei} type=${event.type}`);
+      continue;
+    }
+    // Skip hidden/redacted (deleted) events unless explicitly enabled. A redacted
+    // event has redacted_because in unsigned and/or an emptied content object.
+    const isHidden =
+      !!event.unsigned?.redacted_because ||
+      !event.content ||
+      Object.keys(event.content).length === 0;
+    if (isHidden && !renderCfg.showHiddenMessages) {
+      log.debug(`skip hidden/redacted event ${ei}`);
       continue;
     }
     log.debug(`Parsing event ${ei} sender=${event.sender} type=${event.type}`);
@@ -266,7 +277,10 @@ export default async function createImage(
             .replace(/>/g, "&gt;")
             .replace(/\n/g, "<br>");
         }
-        reply = { displayname: replyName, tokens: parseHtml(repHtml) };
+        reply = {
+          displayname: replyName,
+          tokens: parseHtml(repHtml, renderCfg.emojiSize),
+        };
       } catch (e) {
         log.warn("Reply load failed", replyToId, String(e));
         reply = {
@@ -359,7 +373,8 @@ export default async function createImage(
         }
       }
       // Couldn't fetch the media – always substitute a placeholder card so the quote
-      // still renders fully with a clear "unavailable" marker.
+      // still renders fully with a clear "unavailable" marker. The card is generated
+      // at the media's real aspect ratio (from info.w/h) so it isn't stretched.
       if (!loaded) {
         const isGif = /gif/.test(mime) || /\.gif$/i.test(bodyName);
         const kind: "gif" | "video" | "sticker" | "image" = isGif
@@ -369,7 +384,14 @@ export default async function createImage(
             : isSticker
               ? "sticker"
               : "image";
-        attachedImage = await generatePlaceholder(kind);
+        const aw = info.w || 256;
+        const ah = info.h || 256;
+        const pScale = 256 / Math.max(aw, ah);
+        attachedImage = await generatePlaceholder(
+          kind,
+          aw * pScale,
+          ah * pScale,
+        );
         log.fail(
           `${kind} media unavailable, substituting placeholder – ${contentUrl}`,
         );
@@ -391,22 +413,24 @@ export default async function createImage(
       }
 
       if (attachedImage) {
-        const MAX_W = isSticker ? Math.min(280, renderCfg.stickerMaxSize) : 320;
-        const MAX_H = isSticker ? Math.min(280, renderCfg.stickerMaxSize) : 320;
+        // Display cap: stickers honour render.stickerMaxSize; plain images cap at IMAGE_MAX.
+        const MAX = isSticker ? renderCfg.stickerMaxSize : IMAGE_MAX;
         let w = info.w || attachedImage.width;
         let h = info.h || attachedImage.height;
-        if (w > MAX_W) {
-          h = h * (MAX_W / w);
-          w = MAX_W;
-        }
-        if (h > MAX_H) {
-          w = w * (MAX_H / h);
-          h = MAX_H;
-        }
-        if (isSticker && w < 128 && h < 128) {
-          const scale = 160 / Math.max(w, h);
+        // Scale down to fit the cap, preserving aspect ratio.
+        if (w > MAX || h > MAX) {
+          const scale = MAX / Math.max(w, h);
           w *= scale;
           h *= scale;
+        }
+        // Upscale tiny stickers to a readable minimum (bounded by the cap).
+        if (isSticker) {
+          const minSize = Math.min(160, MAX);
+          if (w < minSize && h < minSize) {
+            const scale = minSize / Math.max(w, h);
+            w *= scale;
+            h *= scale;
+          }
         }
         // Round UP and keep the original aspect ratio (no forced 1:1).
         attachedImageSize = { width: Math.ceil(w), height: Math.ceil(h) };
@@ -434,7 +458,7 @@ export default async function createImage(
             .replace(/>/g, "&gt;")
             .replace(/\n/g, "<br>");
         }
-        tokens = parseHtml(htmlBody);
+        tokens = parseHtml(htmlBody, renderCfg.emojiSize);
       }
     }
     // File / audio
@@ -483,6 +507,7 @@ export default async function createImage(
       ) {
         tokens = parseHtml(
           highlightCodeBlocks(sanitizeEventHtml(event.content.formatted_body)),
+          renderCfg.emojiSize,
         );
       }
     } else {
@@ -502,7 +527,7 @@ export default async function createImage(
           .replace(/>/g, "&gt;")
           .replace(/\n/g, "<br>");
       }
-      tokens = parseHtml(htmlBody);
+      tokens = parseHtml(htmlBody, renderCfg.emojiSize);
       log.debug(
         `Text tokens: ${tokens.length} tokens, ${tokens.filter((t) => t.type === "image").length} inline images`,
       );

@@ -72,7 +72,7 @@ function decodeHtml(html: string) {
     .replace(/&#39;/g, "'");
 }
 
-export function parseHtml(html: string): Token[] {
+export function parseHtml(html: string, emojiSize = 20): Token[] {
   const tokens: Token[] = [];
   const regex = /(<[^>]+>)|([^<]+)/g;
   let match;
@@ -227,18 +227,15 @@ export function parseHtml(html: string): Token[] {
               /emoji/i.test(altMatch?.[1] || "");
 
             if (!w || !h) {
-              if (isEmoji) {
-                w = h = 20; // inline custom-emoji size
-              } else {
-                w = h = 24; // default
-              }
+              w = h = isEmoji ? emojiSize : Math.round(emojiSize * 1.2);
             }
 
-            // Clamp emoji size to reasonable inline size
-            if (isEmoji && w > 28) {
-              const scale = 20 / Math.max(w, h);
-              w = Math.round(w * scale);
-              h = Math.round(h * scale);
+            // Normalise every emoji to the configured inline size (larger side =
+            // emojiSize), preserving aspect ratio – full control via render.emojiSize.
+            if (isEmoji) {
+              const scale = emojiSize / Math.max(w, h);
+              w = Math.max(1, Math.round(w * scale));
+              h = Math.max(1, Math.round(h * scale));
             }
 
             tokens.push({

@@ -26,6 +26,7 @@ type ConfigurationFile = {
     maxFrames?: number;
     fps?: number;
     ffmpegPath?: string;
+    showHiddenMessages?: boolean;
   };
 };
 
@@ -61,6 +62,7 @@ function getConfig(): Required<ConfigurationFile> & {
       maxFrames: cfg.render?.maxFrames ?? 60,
       fps: cfg.render?.fps ?? 20,
       ffmpegPath: cfg.render?.ffmpegPath ?? "ffmpeg",
+      showHiddenMessages: cfg.render?.showHiddenMessages ?? false,
     },
   };
 

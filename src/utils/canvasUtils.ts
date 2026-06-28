@@ -475,62 +475,69 @@ const PLACEHOLDER_META: Record<
   image: { icon: "", label: "IMAGE" }, // fa-image
 };
 
-const placeholderCache = new Map<PlaceholderKind, Image | null>();
+const placeholderCache = new Map<string, Image | null>();
 
 // A clean, theme-matching card shown when media can't be fetched or generated.
+// Rendered at the real media aspect ratio (w×h) so it's never stretched.
 export async function generatePlaceholder(
   kind: PlaceholderKind = "sticker",
+  width = 256,
+  height = 256,
 ): Promise<Image | null> {
-  if (placeholderCache.has(kind)) return placeholderCache.get(kind)!;
+  const W = Math.max(96, Math.round(width));
+  const H = Math.max(96, Math.round(height));
+  const key = `${kind}:${W}x${H}`;
+  if (placeholderCache.has(key)) return placeholderCache.get(key)!;
   try {
     const { Canvas } = await import("@napi-rs/canvas");
     const { registerFonts, FONT_FAMILY_SANS, FONT_FAMILY_ICONS } =
       await import("./registerFonts");
     registerFonts();
-    const S = 256;
-    const canvas = new Canvas(S, S);
+    const canvas = new Canvas(W, H);
     const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
     const meta = PLACEHOLDER_META[kind];
+    const m = Math.min(W, H); // scale glyph/text to the smaller side
 
     // Rounded dark card matching the bubble palette
-    const grad = ctx.createLinearGradient(0, 0, S, S);
+    const grad = ctx.createLinearGradient(0, 0, W, H);
     grad.addColorStop(0, "#2a2a3e");
     grad.addColorStop(1, "#1b1b29");
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.roundRect(8, 8, S - 16, S - 16, 28);
+    ctx.roundRect(4, 4, W - 8, H - 8, Math.round(m * 0.11));
     ctx.fill();
 
     // Dashed inner frame for a "missing media" feel
     ctx.strokeStyle = "rgba(165,180,252,0.35)";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([8, 8]);
+    ctx.lineWidth = Math.max(1.5, m * 0.008);
+    const inset = Math.round(m * 0.1);
+    ctx.setLineDash([m * 0.03, m * 0.03]);
     ctx.beginPath();
-    ctx.roundRect(28, 28, S - 56, S - 56, 18);
+    ctx.roundRect(inset, inset, W - inset * 2, H - inset * 2, Math.round(m * 0.07));
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Icon
-    ctx.fillStyle = "#a5b4fc";
-    ctx.font = `900 84px ${FONT_FAMILY_ICONS}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(meta.icon, S / 2, S / 2 - 18);
-
-    // Label badge
-    ctx.font = `bold 22px ${FONT_FAMILY_SANS}`;
+    // Icon (scaled to card)
+    ctx.fillStyle = "#a5b4fc";
+    ctx.font = `900 ${Math.round(m * 0.33)}px ${FONT_FAMILY_ICONS}`;
+    ctx.fillText(meta.icon, W / 2, H / 2 - m * 0.07);
+    // Label + sublabel
     ctx.fillStyle = "#e1e1e1";
-    ctx.fillText(meta.label, S / 2, S / 2 + 46);
-    ctx.font = `13px ${FONT_FAMILY_SANS}`;
+    ctx.font = `bold ${Math.round(m * 0.09)}px ${FONT_FAMILY_SANS}`;
+    ctx.fillText(meta.label, W / 2, H / 2 + m * 0.18);
     ctx.fillStyle = "#9a9ab0";
-    ctx.fillText("unavailable", S / 2, S / 2 + 72);
+    ctx.font = `${Math.round(m * 0.05)}px ${FONT_FAMILY_SANS}`;
+    ctx.fillText("unavailable", W / 2, H / 2 + m * 0.28);
 
     const img = await loadImage(canvas.toBuffer("image/png"));
-    placeholderCache.set(kind, img);
+    placeholderCache.set(key, img);
     return img;
   } catch (e) {
     log.warn("placeholder generation failed", String(e).slice(0, 80));
-    placeholderCache.set(kind, null);
+    placeholderCache.set(key, null);
     return null;
   }
 }

@@ -9,6 +9,30 @@ import { createLogger } from "./utils/logger";
 
 const log = createLogger("bot");
 
+// Resolve a raw event to its latest edited content (m.replace). Returns the event
+// unchanged if it was never edited or the lookup fails.
+async function applyLatestEdit(roomId: string, ev: any): Promise<any> {
+  const id = ev?.event_id;
+  if (!id || !ev?.content) return ev;
+  try {
+    const res: any = await client.relations(roomId, id, "m.replace");
+    const edits = res?.events ?? [];
+    if (!edits.length) return ev;
+    const newest = edits.reduce((a: any, b: any) =>
+      (b.getTs?.() ?? 0) > (a.getTs?.() ?? 0) ? b : a,
+    );
+    const nc = newest.getContent?.()?.["m.new_content"];
+    if (nc) {
+      log.debug(`Applying latest edit to ${id}`);
+      // Keep the original relations (e.g. reply); override body/formatting from the edit.
+      return { ...ev, content: { ...ev.content, ...nc } };
+    }
+  } catch (e) {
+    log.debug(`edit lookup failed for ${id}: ${String(e).slice(0, 80)}`);
+  }
+  return ev;
+}
+
 // Ensure tmp directory exists
 if (!existsSync("tmp")) mkdirSync("tmp", { recursive: true });
 
@@ -139,8 +163,14 @@ client.on(RoomEvent.Timeline, async (event, room, toStartOfTimeline) => {
         }
       }
 
-      log.debug(`Rendering ${allEvents.length} event(s)…`);
-      const filePath = await createImage(allEvents, { hideReplies });
+      // Apply the latest edit (m.replace) to each event so quotes reflect the current
+      // message text, not the original a user has since edited.
+      const resolvedEvents = await Promise.all(
+        allEvents.map((e) => applyLatestEdit(room.roomId, e)),
+      );
+
+      log.debug(`Rendering ${resolvedEvents.length} event(s)…`);
+      const filePath = await createImage(resolvedEvents, { hideReplies });
       const imageData = readFileSync(filePath);
 
       // createImage returns .png for a static quote, or .webp/.gif/.mp4 when the

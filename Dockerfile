@@ -20,7 +20,6 @@ RUN bun install --production --frozen-lockfile
 
 # Copy source
 COPY src/ ./src/
-COPY templates/ ./templates/
 COPY fonts/ ./fonts/
 COPY tsconfig.json ./
 

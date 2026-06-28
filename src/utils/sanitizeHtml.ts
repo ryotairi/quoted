@@ -95,11 +95,8 @@ export function sanitizeEventHtml(dirty: string): string {
           // alpha → black, which ruins transparent emoji/inline images.
           src: attribs.src ? transformImgSrc(attribs.src, false) : "",
         };
-        // Ensure emoji size is reasonable if not specified
-        if (isEmoji && !newAttribs.width) {
-          newAttribs.width = "20";
-          newAttribs.height = "20";
-        }
+        // NOTE: don't force a fixed emoji size here – the renderer applies the
+        // configurable render.emojiSize (and normalises oversized emoji) in parseHtml.
         return {
           tagName,
           attribs: newAttribs,
