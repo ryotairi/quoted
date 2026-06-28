@@ -31,9 +31,9 @@ Originally by [rustyraven](https://github.com/ryotairi/quoted), enhanced by [Vad
 
 All rendered from live Matrix messages (real users, avatars, and stickers):
 
-| Text quote | Sticker with reply | Conversation |
-|---|---|---|
-| ![Text quote](examples/01-text-quote.png) | ![Sticker](examples/02-sticker.png) | ![Conversation](examples/04-conversation.png) |
+| Text quote | Sticker with reply | Conversation | Missing media |
+|---|---|---|---|
+| ![Text quote](examples/01-text-quote.png) | ![Sticker](examples/02-sticker.png) | ![Conversation](examples/04-conversation.png) | ![Placeholder](examples/05-placeholder.png) |
 
 Animated quote output – a Matrix `m.video` re-encoded into the configured format. GIF keeps transparency and animates inline here:
 
@@ -42,6 +42,15 @@ Animated quote output – a Matrix `m.video` re-encoded into the configured form
 Same quote in the other output formats: [animated WebP](examples/03-animated-webp.webp) (native sticker, smaller) · [MP4](examples/03-animated-mp4.mp4) (universal, no transparency).
 
 Regenerate all of these against your own homeserver with `bun run test/examples.ts`.
+
+## How quotes are delivered
+
+The bot first replies with a "⏳ Generating quote…" message, then:
+
+- **Static quote** → that message is removed and a native **`m.sticker`** is sent (and added to the room's `im.ponies` pack).
+- **Animated quote** → the message is **edited in place** into the result: `mp4` → `m.video`, `gif`/`webp` → `m.image` (both animate in clients).
+
+If a quoted attachment can't be fetched (e.g. server retention deleted it), the quote still renders with a clear **placeholder card** instead of failing.
 
 ## Setting up (Bun)
 

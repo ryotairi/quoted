@@ -62,12 +62,23 @@ async function main() {
         (e.type === 'm.sticker' || e.content?.msgtype === 'm.video' || e.content?.msgtype === 'm.image') &&
         /gif|webm|mp4/.test(e.content?.info?.mimetype || '')
     );
-    if (animated[0]) {
+    // Pick the first candidate whose media actually downloads (skip retention-deleted ones).
+    let animEvent: Ev | null = null;
+    for (const e of animated) {
+        const mxc = e.content?.url;
+        if (!mxc?.startsWith('mxc://')) continue;
+        const [s, i] = [mxc.slice(6).split('/')[0], mxc.slice(6).split('/').slice(1).join('/').split('#')[0]];
+        const res = await fetch(`${HS}/_matrix/client/v1/media/download/${s}/${i}`, { headers: auth, signal: AbortSignal.timeout(15000) }).catch(() => null);
+        if (res?.ok) { animEvent = e; break; }
+    }
+    if (animEvent) {
         for (const fmt of ['webp', 'gif', 'mp4'] as const) {
             (config.render as any).animatedFormat = fmt;
-            await save(`03-animated-${fmt}`, [animated[0]]);
+            await save(`03-animated-${fmt}`, [animEvent]);
         }
         (config.render as any).animatedFormat = 'webp';
+    } else {
+        log.fail('no fetchable animated media found for examples');
     }
 
     // 4. A short conversation (mix of senders)
@@ -78,6 +89,18 @@ async function main() {
         if (convo.length >= 3) break;
     }
     if (convo.length >= 2) await save('04-conversation', convo.reverse());
+
+    // 5. Placeholder – a quote whose attachment can't be fetched (retention-deleted etc.)
+    const realSender = texts[0]?.sender || '@telegram_2006932399:extera.xyz';
+    const deadGif: Ev = {
+        type: 'm.room.message', sender: realSender,
+        room_id: events[0]?.room_id || '!unknown:extera.xyz',
+        content: { msgtype: 'm.video', body: 'lost.gif',
+            url: 'mxc://extera.xyz/DEADdeadDEADdeadDEADdead',
+            info: { mimetype: 'image/gif', w: 256, h: 256, size: 1 } },
+    };
+    (config.render as any).animatedFormat = 'webp';
+    await save('05-placeholder', [deadGif]);
 
     log.info('done – see examples/');
 }
