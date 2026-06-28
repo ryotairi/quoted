@@ -17,11 +17,16 @@ logLevel: info  # debug | info | warn | error
 
 # Rendering options
 render:
-  # Animated stickers / emoji -> animated output sticker (WebP)
-  # Requires ffmpeg in PATH
+  # Render animated quotes (when the quoted media is animated). Requires ffmpeg.
   animatedStickers: true
 
-  # Transparent background for generated stickers (Telegram style)
+  # Output format for animated quotes:
+  #   webp - animated WebP, sent as a native m.sticker (best, but some bridges can't display it)
+  #   gif  - animated GIF, sent as m.image (wide support, keeps transparency)
+  #   mp4  - H.264 video, sent as m.video (universal, but NO transparency → flattened)
+  animatedFormat: webp
+
+  # Transparent background for generated stickers
   transparentBackground: true
 
   # Make message bubbles transparent too? usually false
@@ -30,7 +35,7 @@ render:
   # Max sticker size in px
   stickerMaxSize: 512
 
-  # Inline emoji size (Telegram custom emoji)
+  # Inline custom-emoji size
   emojiSize: 22
 
   # Animation limits (to avoid huge files)

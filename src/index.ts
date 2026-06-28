@@ -104,24 +104,38 @@ client.on(RoomEvent.Timeline, async (event, room, toStartOfTimeline) => {
             const filePath = await createImage(allEvents, { hideReplies });
             const imageData = readFileSync(filePath);
 
-            const isWebp = filePath.endsWith('.webp');
-            const mimeType = isWebp ? 'image/webp' : 'image/png';
-            const fileName = isWebp ? 'sticker.webp' : 'sticker.png';
+            // Pick how to send based on the rendered file format. Animated WebP goes as a
+            // native sticker; GIF/MP4 go as image/video so bridges that can't show animated
+            // WebP still display them.
+            const ext = filePath.split('.').pop()!.toLowerCase();
+            const sendMeta: Record<string, { mime: string; name: string; event: string; msgtype?: string }> = {
+                webp: { mime: 'image/webp', name: 'sticker.webp', event: 'm.sticker' },
+                png:  { mime: 'image/png',  name: 'sticker.png',  event: 'm.sticker' },
+                gif:  { mime: 'image/gif',  name: 'quote.gif',    event: 'm.room.message', msgtype: 'm.video' },
+                mp4:  { mime: 'video/mp4',  name: 'quote.mp4',    event: 'm.room.message', msgtype: 'm.video' },
+            };
+            const meta = sendMeta[ext] || sendMeta.png;
+            const isSticker = meta.event === 'm.sticker';
 
-            log.info(`Uploading ${fileName} ${(imageData.length/1024).toFixed(1)}KB …`);
-            const uploadResponse = await client.uploadContent(imageData, { name: fileName, type: mimeType });
+            log.info(`Uploading ${meta.name} ${(imageData.length/1024).toFixed(1)}KB …`);
+            const uploadResponse = await client.uploadContent(imageData, { name: meta.name, type: meta.mime });
             const mxcUrl = uploadResponse.content_uri;
             log.info(`Uploaded → ${mxcUrl}`);
 
-            // Send as sticker
-            // @ts-ignore
-            await client.sendEvent(room.roomId, 'm.sticker', {
-                body: fileName,
-                info: { mimetype: mimeType, size: imageData.length },
+            const relatesTo = { 'm.relates_to': { 'm.in_reply_to': { event_id: event.getId() } } };
+            const content: any = {
+                body: meta.name,
+                info: { mimetype: meta.mime, size: imageData.length },
                 url: mxcUrl,
-                'm.relates_to': { 'm.in_reply_to': { event_id: event.getId() } },
-            });
-            log.info(`Sticker sent to ${room.roomId}`);
+                ...relatesTo,
+            };
+            if (meta.msgtype) content.msgtype = meta.msgtype;
+            // @ts-ignore
+            await client.sendEvent(room.roomId, meta.event, content);
+            log.success(`quote (${ext}) sent to ${room.roomId}`);
+
+            // Only image stickers (webp/png) belong in the im.ponies sticker pack.
+            if (!isSticker) return;
 
             const id = createFileId(allEvents);
             const state = room.getLiveTimeline().getState(Direction.Forward);
@@ -132,7 +146,7 @@ client.on(RoomEvent.Timeline, async (event, room, toStartOfTimeline) => {
                 log.debug(`Sticker ${id} already in pack, skipping state event`);
                 return;
             }
-            images[id] = { url: mxcUrl, info: { mimetype: mimeType, size: imageData.length } };
+            images[id] = { url: mxcUrl, info: { mimetype: meta.mime, size: imageData.length } };
 
             if (state.mayClientSendStateEvent('im.ponies.room_emotes', client)) {
                 // @ts-ignore
@@ -143,7 +157,7 @@ client.on(RoomEvent.Timeline, async (event, room, toStartOfTimeline) => {
                 client.sendHtmlNotice(room.roomId, '', '<i>Could not create "Quoted" sticker pack, can\'t send state event "im.ponies.room_emotes"</i>').catch(()=>{});
             }
         } catch (err) {
-            log.error('Error processing quote:', err);
+            log.fail(`quote generation failed in ${room.roomId}: ${String(err).slice(0, 160)}`);
             client.sendHtmlNotice(room.roomId, '', '<b>Failed to create quote image.</b>').catch(()=>{});
         }
     } else if (fullCmd === helpCmd) {

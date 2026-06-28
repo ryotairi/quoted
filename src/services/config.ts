@@ -18,6 +18,7 @@ type ConfigurationFile = {
     };
     render?: {
         animatedStickers?: boolean;
+        animatedFormat?: 'webp' | 'gif' | 'mp4';
         transparentBackground?: boolean;
         transparentBubbles?: boolean;
         stickerMaxSize?: number;
@@ -46,6 +47,8 @@ function getConfig(): Required<ConfigurationFile> & { render: Required<NonNullab
         },
         render: {
             animatedStickers: cfg.render?.animatedStickers ?? true,
+            animatedFormat: (['webp', 'gif', 'mp4'].includes(cfg.render?.animatedFormat as string)
+                ? cfg.render!.animatedFormat : 'webp') as 'webp' | 'gif' | 'mp4',
             transparentBackground: cfg.render?.transparentBackground ?? true,
             transparentBubbles: cfg.render?.transparentBubbles ?? false,
             stickerMaxSize: cfg.render?.stickerMaxSize ?? 512,

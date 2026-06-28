@@ -113,7 +113,7 @@ export async function downloadFile(url: string, label = 'media', timeoutMs = 150
     } catch (e) {
         const ms = Date.now() - started;
         const isTimeout = e instanceof Error && e.name === 'TimeoutError';
-        log.warn(`media ${label} ← ${isTimeout ? `TIMEOUT after ${ms}ms` : 'ERROR ' + String(e).slice(0, 80)} ${shortUrl(resolvedUrl)}`);
+        log.fail(`media ${label} ${isTimeout ? `TIMEOUT after ${ms}ms` : 'ERROR ' + String(e).slice(0, 80)} ${shortUrl(resolvedUrl)}`);
         return null;
     }
 }
@@ -255,7 +255,7 @@ export async function loadCanvasImage(url: string, opts: { emoji?: boolean } = {
                 dl = await downloadFile(fallbackUrl, logCtx);
             }
             if (!dl) {
-                log.warn(`Failed to download ${logCtx}`, url.slice(0, 100));
+                log.fail(`could not fetch ${logCtx} ${shortUrl(url)}`);
                 return null;
             }
             buffer = dl.buffer;

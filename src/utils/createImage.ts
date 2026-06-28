@@ -115,7 +115,8 @@ export default async function createImage(events: any[], options: CreateImageOpt
 
     const baseFileId = createFileId(events);
     const outPng = `tmp/${baseFileId}.png`;
-    const outWebp = `tmp/${baseFileId}.webp`;
+    const animFormat = renderCfg.animatedFormat || 'webp';
+    const outAnim = `tmp/${baseFileId}.${animFormat}`;
 
     const PADDING = 12;
     const AVATAR_SIZE = 36;
@@ -228,9 +229,9 @@ export default async function createImage(events: any[], options: CreateImageOpt
                 const kind = isGif ? 'gif' : isVideo ? 'video' : (isSticker || isAnimated) ? 'sticker' : null;
                 if (kind) {
                     attachedImage = await generatePlaceholder(kind);
-                    log.warn(`media unavailable, using ${kind} placeholder`, contentUrl);
+                    log.fail(`${kind} media unavailable, substituting placeholder – ${contentUrl}`);
                 } else {
-                    log.warn('Failed to load attached image, will render without', contentUrl);
+                    log.fail(`could not load attached image, rendering without it – ${contentUrl}`);
                 }
             }
 
@@ -565,20 +566,35 @@ export default async function createImage(events: any[], options: CreateImageOpt
         }
         log.info(`Composited ${frameFiles.length} frames`);
 
-        // Encode animated WebP via ffmpeg (alpha preserved: -pix_fmt yuva420p path via libwebp_anim)
+        // Encode the chosen animated format. Some bridges can't display animated WebP,
+        // so gif (transparency-aware) and mp4 (universally supported, no alpha) are options.
         const { $ } = await import('bun');
         const { normalizeFfmpegPath } = await import('./canvasUtils');
         const fps = renderCfg.fps;
         const ff = normalizeFfmpegPath(renderCfg.ffmpegPath);
-        await $`${ff} -y -loglevel error -framerate ${fps} -i ${compositeDir}/frame_%03d.png -c:v libwebp_anim -loop 0 -lossless 0 -q:v 75 -preset default -an ${outWebp}`.quiet();
-        log.info(`Animated WebP encoded → ${outWebp}`);
+        const frames = `${compositeDir}/frame_%03d.png`;
+        // Filter strings MUST be passed as interpolated variables, not inline – bun's $
+        // would otherwise try to parse ';' '(' '[' as shell syntax.
+        if (animFormat === 'gif') {
+            // Palette graph keeps quality + binary transparency.
+            const vf = `split[s0][s1];[s0]palettegen=reserve_transparent=1[p];[s1][p]paletteuse=alpha_threshold=128`;
+            await $`${ff} -y -loglevel error -framerate ${fps} -i ${frames} -vf ${vf} -loop 0 ${outAnim}`.quiet();
+        } else if (animFormat === 'mp4') {
+            // MP4/H.264 has no alpha → transparent areas flatten to black. Even dims required.
+            const vf = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p`;
+            await $`${ff} -y -loglevel error -framerate ${fps} -i ${frames} -vf ${vf} -c:v libx264 -pix_fmt yuv420p -movflags +faststart -an ${outAnim}`.quiet();
+        } else {
+            // Animated WebP, alpha preserved.
+            await $`${ff} -y -loglevel error -framerate ${fps} -i ${frames} -c:v libwebp_anim -loop 0 -lossless 0 -q:v 75 -preset default -an ${outAnim}`.quiet();
+        }
+        log.success(`animated ${animFormat.toUpperCase()} encoded → ${outAnim}`);
 
         // Cleanup temp
         try { unlinkSync(tmpAnimPath); rmSync(framesDir, {recursive:true, force:true}); rmSync(compositeDir, {recursive:true, force:true}); } catch {}
 
-        return outWebp;
+        return outAnim;
     } catch (e) {
-        log.error('Animated render failed, falling back to static PNG', e);
+        log.fail('animated render failed, falling back to static PNG – ' + String(e).slice(0, 120));
         const canvas = new Canvas(totalWidth, totalHeight);
         const ctx = canvas.getContext("2d");
         paintFrame(ctx);

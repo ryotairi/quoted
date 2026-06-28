@@ -12,17 +12,36 @@ Originally by [rustyraven](https://github.com/ryotairi/quoted), enhanced by [Vad
   - Frame extraction uses sharp for GIF/WebP (keeps alpha), ffmpeg for video
 - **Custom emoji** – inline `<img data-mx-emoticon>` rendered at `render.emojiSize`
   - If the emoji media is gone (server retention), falls back to the Unicode emoji from `alt` via Noto Color Emoji
+- **GIFs & video** – Matrix sends GIFs as `m.video`; they're rendered animated, with a poster frame extracted via ffmpeg
+  - When media can't be fetched or generated, a clean **GIF / VIDEO / STICKER placeholder card** is substituted instead of a blank space
+- **Selectable animated output** – `render.animatedFormat: webp | gif | mp4` — pick what your bridge/clients support:
+  - `webp` → native animated `m.sticker` (best quality, keeps alpha; some bridges can't show it)
+  - `gif` → animated `m.image` (wide support, keeps transparency)
+  - `mp4` → `m.video` (universal, but flattens transparency)
 - **File / document attachments** – clean cards with **Font Awesome 6** vector icons, name, size, mime
 - **Transparent background** – `render.transparentBackground: true` for Telegram-style stickers with alpha
 - **Full Unicode coverage** – Noto Sans / Math / Symbols2 / Color Emoji / CJK + Font Awesome 6
   - Renders 𝐕𝐀𝐈, 𝕋𝔼𝕊𝕋, 😀🎉, 你好, etc. correctly
-- **Authenticated media** – uses the modern `/_matrix/client/v1/media/*` endpoints with `Authorization: Bearer`
-- **Structured logging** – colorized, timestamped, scoped (`[quoted][render] INFO …`), `logLevel: debug|info|warn|error`
+- **Authenticated media** – uses the modern `/_matrix/client/v1/media/*` endpoints with `Authorization: Bearer` (legacy `/media/v3/` is rejected by current servers)
+- **Profile caching** – avatars and display names are cached per render batch (one fetch per user)
+- **Designed logger** – aligned, colorized, scoped, with white-on-colour level badges and `(STATUS CODE: …)` tags; `logLevel: debug|info|warn|error`
 - Runs on **Bun**
 
 ## Examples
-![Example screenshot](examples/1.png)
-![Example screenshot](examples/2.png)
+
+All rendered from live Matrix messages (real users, avatars, and stickers):
+
+| Text quote | Sticker with reply | Conversation |
+|---|---|---|
+| ![Text quote](examples/01-text-quote.png) | ![Sticker](examples/02-sticker.png) | ![Conversation](examples/04-conversation.png) |
+
+Animated quote output – a Matrix `m.video` re-encoded into the configured format. GIF keeps transparency and animates inline here:
+
+![Animated GIF quote](examples/03-animated-gif.gif)
+
+Same quote in the other output formats: [animated WebP](examples/03-animated-webp.webp) (native sticker, smaller) · [MP4](examples/03-animated-mp4.mp4) (universal, no transparency).
+
+Regenerate all of these against your own homeserver with `bun run test/examples.ts`.
 
 ## Setting up (Bun)
 
@@ -64,7 +83,8 @@ Supported message types: `m.text` (rich HTML + emoji), `m.image` / `m.sticker` (
 
 ```yaml
 render:
-  animatedStickers: true            # animated WebP output (needs ffmpeg)
+  animatedStickers: true            # render animated quotes (needs ffmpeg)
+  animatedFormat: webp              # webp | gif | mp4  – animated output format
   transparentBackground: true       # alpha background
   transparentBubbles: false
   stickerMaxSize: 512
@@ -77,11 +97,33 @@ render:
 
 > On Windows, write `ffmpegPath` with **forward slashes** or single quotes — double-quoted YAML interprets `\b`, `\f`, `\t` as escape codes and corrupts the path.
 
+## Logging
+
+Every line follows a single format:
+
+```
+{TIME} |{module}> [{LEVEL}] (STATUS CODE: {code}) | {message} <|
+```
+
+- **Levels:** `DEBUG`, `INFO`, `SUCCESS`, `WARN`, `ERR`, `FAIL` — each a white badge on a coloured background.
+- `FAIL` marks genuine data failures (media couldn't be fetched, generation fell back, a quote couldn't be built).
+- The `(STATUS CODE: …)` tag appears only when a log carries an HTTP status.
+- `matrix-js-sdk`'s own output (HTTP, sync, push rules) is routed through the same format under the `sdk` module; its verbose stream shows only at `logLevel: debug`.
+
+```
+11:08:12.970 |matrix > [SUCCESS] | client ready for @bot @ https://extera.xyz <|
+11:08:12.984 |render > [ WARN  ] (STATUS CODE: 404) | media emoji extera.xyz/abc <|
+11:08:12.984 |render > [ FAIL  ] | gif media unavailable, substituting placeholder <|
+```
+
+Set verbosity with `logLevel: debug|info|warn|error`. Colour is disabled automatically when `NO_COLOR` is set.
+
 ## Testing
 
 ```bash
-bun run test          # renders sample images into tmp/
-bun run test/diag.ts  # probes your homeserver's media endpoints (useful for debugging)
+bun run test            # renders sample images into tmp/
+bun run test/examples.ts # regenerate README examples from your live homeserver
+bun run test/diag.ts    # probe your homeserver's media endpoints (useful for debugging)
 ```
 
 ## Font troubleshooting
