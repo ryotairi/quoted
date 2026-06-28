@@ -2,29 +2,33 @@ import client from "./services/matrix";
 import config from "./services/config";
 import createImage from "./utils/createImage";
 import { readFileSync, mkdirSync, existsSync } from "fs";
-import { RoomEvent, RoomMemberEvent, Membership, Direction } from "matrix-js-sdk";
+import { RoomEvent, RoomMemberEvent, Direction } from "matrix-js-sdk";
 import createFileId from "./utils/createFileId";
+import { createLogger } from "./utils/logger";
+
+const log = createLogger('bot');
 
 // Ensure tmp directory exists
-if (!existsSync('tmp')) {
-    mkdirSync('tmp');
-}
+if (!existsSync('tmp')) mkdirSync('tmp', { recursive: true });
 
 const startTime = Date.now();
+log.info(`Quoted-Matrix starting – userId=${config.matrix.userId}, animatedStickers=${config.render.animatedStickers}, transparentBg=${config.render.transparentBackground}`);
+
 // Auto-join rooms on invite
 client.on(RoomMemberEvent.Membership, async (event, member) => {
     if (event.localTimestamp < startTime) return;
     if (member.membership === 'invite' && member.userId === config.matrix.userId) {
+        log.info(`Invited to room ${member.roomId}, joining…`);
         try {
             await client.joinRoom(member.roomId);
+            log.info(`Joined ${member.roomId}`);
         } catch (err) {
-            console.error(`Failed to join room ${member.roomId}:`, err);
+            log.error(`Failed to join room ${member.roomId}:`, err);
         }
-
         try {
             await client.sendHtmlNotice(member.roomId, config.welcomeText, config.welcomeText);
         } catch (err) {
-            console.error(`Failed to send a message ${member.roomId}:`, err);
+            log.error(`Failed to send welcome to ${member.roomId}:`, err);
         }
     }
 });
@@ -40,39 +44,46 @@ client.on(RoomEvent.Timeline, async (event, room, toStartOfTimeline) => {
     const content = event.getContent();
     if (content.msgtype !== 'm.text') return;
 
-    const args = content.body.split(' ');
-    const cmd = args.shift();
+    const prefix = (config as any).commandPrefix || '..';
+    const quoteCmd = `${prefix}${(config as any).commands?.quote || 'q'}`;
+    const helpCmd = `${prefix}${(config as any).commands?.help || 'help'}`;
 
-    if (cmd === '..q') {
+    // Strip Matrix reply fallback ("> quote\n\n actual message" added by clients)
+    let body = (content.body || '').trim();
+    if (body.startsWith('> ')) {
+        const sep = body.indexOf('\n\n');
+        if (sep !== -1) body = body.slice(sep + 2).trim();
+    }
+    if (!body.startsWith(prefix)) return;
+
+    const args = body.slice(prefix.length).trim().split(/\s+/);
+    const cmdName = args.shift() || '';
+
+    const fullCmd = prefix + cmdName;
+
+    if (fullCmd === quoteCmd) {
         const replyTo = content['m.relates_to']?.['m.in_reply_to']?.event_id;
         if (typeof replyTo !== 'string') {
             await client.sendHtmlNotice(room.roomId, '', '<b>Please reply to a message!</b>');
             return;
         }
 
-        // Parse optional flags and count of additional messages after the replied-to message.
         let hideReplies = false;
         let count = 0;
         for (const arg of args) {
-            if (arg === '-c') {
-                hideReplies = true;
-                continue;
-            }
-
+            if (arg === '-c') { hideReplies = true; continue; }
             const parsedCount = parseInt(arg, 10);
-            if (!isNaN(parsedCount) && parsedCount > 0) {
-                count = Math.min(parsedCount, 20);
-            }
+            if (!isNaN(parsedCount) && parsedCount > 0) count = Math.min(parsedCount, 20);
         }
+
+        log.info(`Quote request in ${room.roomId} – replyTo=${replyTo} count=${count} hideReplies=${hideReplies}`);
 
         try {
             if (count > 10) {
-                await client.sendNotice(room.roomId, `${count} is a too large value! Maximum is 10`);
-		return;
+                await client.sendNotice(room.roomId, `${count} is too large! Maximum is 10`);
+                return;
             }
-            // Fetch the replied-to event
             const replyToEvent = await client.fetchRoomEvent(room.roomId, replyTo);
-
             const allEvents = [replyToEvent];
 
             if (count > 0) {
@@ -85,78 +96,75 @@ client.on(RoomEvent.Timeline, async (event, room, toStartOfTimeline) => {
                 const index = timeline.getEvents().findIndex(x => x.getId() == replyTo);
                 const events = timeline.getEvents();
                 for (let i = index + 1; i <= index + count; i++) {
-                    try {
-                        if (events[i])
-                            allEvents.push(events[i].event);
-                    } catch (error) {
-
-                    }
+                    try { if (events[i]) allEvents.push(events[i].event); } catch {}
                 }
             }
 
+            log.debug(`Rendering ${allEvents.length} event(s)…`);
             const filePath = await createImage(allEvents, { hideReplies });
             const imageData = readFileSync(filePath);
 
-            // Upload the image
-            const uploadResponse = await client.uploadContent(imageData, {
-                name: 'image.png',
-                type: 'image/png',
-            });
+            // Pick how to send based on the rendered file format. Animated WebP goes as a
+            // native sticker; GIF/MP4 go as image/video so bridges that can't show animated
+            // WebP still display them.
+            const ext = filePath.split('.').pop()!.toLowerCase();
+            const sendMeta: Record<string, { mime: string; name: string; event: string; msgtype?: string }> = {
+                webp: { mime: 'image/webp', name: 'sticker.webp', event: 'm.sticker' },
+                png:  { mime: 'image/png',  name: 'sticker.png',  event: 'm.sticker' },
+                gif:  { mime: 'image/gif',  name: 'quote.gif',    event: 'm.room.message', msgtype: 'm.video' },
+                mp4:  { mime: 'video/mp4',  name: 'quote.mp4',    event: 'm.room.message', msgtype: 'm.video' },
+            };
+            const meta = sendMeta[ext] || sendMeta.png;
+            const isSticker = meta.event === 'm.sticker';
 
+            log.info(`Uploading ${meta.name} ${(imageData.length/1024).toFixed(1)}KB …`);
+            const uploadResponse = await client.uploadContent(imageData, { name: meta.name, type: meta.mime });
             const mxcUrl = uploadResponse.content_uri;
+            log.info(`Uploaded → ${mxcUrl}`);
 
-            // Send as sticker
-            // @ts-ignore
-            await client.sendEvent(room.roomId, 'm.sticker', {
-                body: 'image.png',
-                info: {
-                    mimetype: 'image/png',
-                    size: imageData.length,
-                },
+            const relatesTo = { 'm.relates_to': { 'm.in_reply_to': { event_id: event.getId() } } };
+            const content: any = {
+                body: meta.name,
+                info: { mimetype: meta.mime, size: imageData.length },
                 url: mxcUrl,
-                'm.relates_to': {
-                    'm.in_reply_to': {
-                        event_id: event.getId(),
-                    },
-                },
-            });
+                ...relatesTo,
+            };
+            if (meta.msgtype) content.msgtype = meta.msgtype;
+            // @ts-ignore
+            await client.sendEvent(room.roomId, meta.event, content);
+            log.success(`quote (${ext}) sent to ${room.roomId}`);
+
+            // Only image stickers (webp/png) belong in the im.ponies sticker pack.
+            if (!isSticker) return;
 
             const id = createFileId(allEvents);
             const state = room.getLiveTimeline().getState(Direction.Forward);
             const roomEmotes = state.getStateEvents('im.ponies.room_emotes', 'quoted')?.getContent() ?? {};
             const images = roomEmotes && typeof roomEmotes.images === 'object' ? roomEmotes.images : {};
             const pack = roomEmotes && typeof roomEmotes.pack === 'object' ? roomEmotes.pack : null;
-            if (images[id]) return;
-
-            images[id] = {
-                info: {
-                    mimetype: 'image/png',
-                    size: imageData.length,
-                },
-                url: mxcUrl,
-            };
+            if (images[id]) {
+                log.debug(`Sticker ${id} already in pack, skipping state event`);
+                return;
+            }
+            images[id] = { url: mxcUrl, info: { mimetype: meta.mime, size: imageData.length } };
 
             if (state.mayClientSendStateEvent('im.ponies.room_emotes', client)) {
                 // @ts-ignore
-                await client.sendStateEvent(room.roomId, 'im.ponies.room_emotes', { 
-                    images, 
-                    pack: pack ?? {
-                        display_name: 'Quoted',
-                        usage: ['sticker']
-                    }
-                 }, 'quoted');
+                await client.sendStateEvent(room.roomId, 'im.ponies.room_emotes', { images, pack: pack ?? { display_name: 'Quoted', usage: ['sticker'] } }, 'quoted');
+                log.info(`Added sticker ${id} to room pack`);
             } else {
-                client.sendHtmlNotice(room.roomId, '', '<i>Could not create "Quoted" sticker pack, can\'t send state event "im.ponies.room_emotes"</i>').catch(console.error);
+                log.warn(`No permission to send im.ponies.room_emotes in ${room.roomId}`);
+                client.sendHtmlNotice(room.roomId, '', '<i>Could not create "Quoted" sticker pack, can\'t send state event "im.ponies.room_emotes"</i>').catch(()=>{});
             }
         } catch (err) {
-            console.error('Error processing quote:', err);
-            client.sendHtmlNotice(room.roomId, '', '<b>Failed to create quote image.</b>').catch(console.error);
+            log.fail(`quote generation failed in ${room.roomId}: ${String(err).slice(0, 160)}`);
+            client.sendHtmlNotice(room.roomId, '', '<b>Failed to create quote image.</b>').catch(()=>{});
         }
-    } else if (cmd === '..help') {
-        client.sendHtmlNotice(room.roomId, config.helpText, config.helpText).catch(console.error);
+    } else if (fullCmd === helpCmd) {
+        client.sendHtmlNotice(room.roomId, config.helpText, config.helpText).catch(e => log.error('help send failed', e));
     }
 });
 
 client.startClient({ initialSyncLimit: 0 }).then(() => {
-    console.log('Client ready!');
+    log.info('Matrix client ready!');
 });
