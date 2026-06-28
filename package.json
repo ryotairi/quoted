@@ -1,12 +1,13 @@
 {
   "name": "quoted",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "A Matrix bot to create stickers from messages.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "bun run test/generate.ts",
     "build": "tsc",
-    "start": "node --enable-source-maps dist/index"
+    "start": "bun run src/index.ts",
+    "dev": "bun run --hot src/index.ts"
   },
   "author": "rustyraven",
   "license": "AGPL-3.0-only",
@@ -16,7 +17,7 @@
     "matrix-js-sdk": "^34.0.0",
     "md5": "^2.3.0",
     "sanitize-html": "^2.17.2",
-    "typescript": "^6.0.2",
+    "sharp": "^0.34.4",
     "yaml": "^2.8.3"
   },
   "devDependencies": {

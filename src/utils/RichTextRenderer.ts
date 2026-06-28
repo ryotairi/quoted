@@ -1,4 +1,5 @@
 import { Image } from "@napi-rs/canvas";
+import { FONT_FAMILY_SANS, FONT_FAMILY_MONO } from './registerFonts';
 
 export type TextStyle = {
     bold: boolean;
@@ -21,6 +22,7 @@ export type ImageToken = {
     w: number;
     h: number;
     imageObj?: Image;
+    isEmoji?: boolean;
 };
 
 export type Token =
@@ -162,15 +164,42 @@ export function parseHtml(html: string): Token[] {
                 if (tagName === 'img') {
                     const srcMatch = tagFull.match(/src=["'](.*?)["']/);
                     const altMatch = tagFull.match(/alt=["'](.*?)["']/);
-                    const wMatch = tagFull.match(/width=["'](\d+)["']/);
-                    const hMatch = tagFull.match(/height=["'](\d+)["']/);
+                    const wMatch = tagFull.match(/width=["'](\d+)(?:px)?["']/);
+                    const hMatch = tagFull.match(/height=["'](\d+)(?:px)?["']/);
+                    const classMatch = tagFull.match(/class=["'](.*?)["']/);
+                    const dataMxEmoticon = /data-mx-emoticon/i.test(tagFull);
+                    
                     if (srcMatch) {
+                        let w = wMatch ? parseInt(wMatch[1], 10) : 0;
+                        let h = hMatch ? parseInt(hMatch[1], 10) : 0;
+                        const cls = classMatch ? classMatch[1] : '';
+                        
+                        // Custom emoji detection
+                        const isEmoji = dataMxEmoticon ||
+                                        /emoji|emoticon|custom-emoji/i.test(cls) ||
+                                        /emoji/i.test(altMatch?.[1] || '');
+
+                        if (!w || !h) {
+                            if (isEmoji) {
+                                w = h = 20; // inline custom-emoji size
+                            } else {
+                                w = h = 24; // default
+                            }
+                        }
+                        
+                        // Clamp emoji size to reasonable inline size
+                        if (isEmoji && w > 28) {
+                            const scale = 20 / Math.max(w, h);
+                            w = Math.round(w * scale);
+                            h = Math.round(h * scale);
+                        }
+                        
                         tokens.push({
                             type: 'image',
                             src: decodeHtml(srcMatch[1]),
                             alt: altMatch ? decodeHtml(altMatch[1]) : '',
-                            w: wMatch ? parseInt(wMatch[1], 10) : 24,
-                            h: hMatch ? parseInt(hMatch[1], 10) : 24,
+                            w, h,
+                            isEmoji
                         });
                     }
                 }
@@ -236,8 +265,8 @@ export function parseHtml(html: string): Token[] {
 
 function getFont(style: TextStyle) {
     let font = `${style.size || 14}px `;
-    if (style.code || style.pre) font += "monospace";
-    else font += "sans-serif";
+    if (style.code || style.pre) font += FONT_FAMILY_MONO;
+    else font += FONT_FAMILY_SANS;
     
     if (style.bold && style.italic) font = "italic bold " + font;
     else if (style.bold) font = "bold " + font;
@@ -462,6 +491,25 @@ export function drawRichText(ctx: any, lines: Line[], startX: number, startY: nu
                 if (item.token.imageObj) {
                     const imgY = cursorY + (line.height - item.h) / 2;
                     ctx.drawImage(item.token.imageObj, startX + item.x, imgY, item.w, item.h);
+                } else if (item.token.alt) {
+                    // Fallback – render alt text (usually emoji character) with emoji font
+                    ctx.fillStyle = defaultColor;
+                    ctx.font = `${item.h}px ${FONT_FAMILY_SANS}`;
+                    ctx.textBaseline = 'middle';
+                    const altY = cursorY + line.height / 2;
+                    ctx.fillText(item.token.alt, startX + item.x, altY);
+                    ctx.textBaseline = 'alphabetic';
+                } else {
+                    // Draw placeholder for failed emoji/sticker load
+                    ctx.fillStyle = "#444";
+                    ctx.beginPath();
+                    ctx.roundRect(startX + item.x, cursorY + 2, item.w, item.h - 4, 4);
+                    ctx.fill();
+                    ctx.fillStyle = "#888";
+                    ctx.font = `10px ${FONT_FAMILY_SANS}`;
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText("🖼", startX + item.x + item.w/2 - 4, cursorY + line.height/2);
+                    ctx.textBaseline = 'alphabetic';
                 }
             } else if (item.type === 'text') {
                 ctx.font = getFont(item.style);
@@ -530,7 +578,7 @@ function drawCodeBg(ctx: any, x: number, y: number, w: number, h: number, lang: 
 
     if (lang) {
         ctx.fillStyle = "#a6adc8";
-        ctx.font = "12px sans-serif";
+        ctx.font = `12px ${FONT_FAMILY_SANS}`;
         ctx.fillText(lang.toLowerCase(), x + 64, y + 20); 
     }
 }
