@@ -762,18 +762,7 @@ export function drawRichText(
           fillStyle = "#aaaaaa";
         }
 
-        if (item.style.spoiler) {
-          ctx.fillStyle = "#222222";
-          ctx.beginPath();
-          ctx.roundRect(
-            startX + item.x,
-            cursorY + 2,
-            item.w,
-            line.height - 4,
-            4,
-          );
-          ctx.fill();
-        } else {
+        {
           ctx.fillStyle = fillStyle;
 
           // Inline code background (only if NOT in a <pre> block!)
